@@ -1,0 +1,47 @@
+# Hermes Data Agent — Default Configuration
+# This config is used when no --config flag is provided.
+
+# ── Model Configuration ──
+# Uses the same model format as hermes-agent (OpenAI-compatible)
+model:
+  name: gpt-4.1-mini
+  temperature: 0.9
+  max_tokens: 4096
+
+# ── Synthesis Configuration ──
+synthesis:
+  num_variants: 5
+  batch_size: 5
+  max_retries: 3
+
+# ── Validation Configuration ──
+validation:
+  enabled: true
+  pass_threshold: 0.75
+
+# ── I/O Paths ──
+io:
+  input_path: data/数据处理测试.xlsx
+  output_json: output/泛化结果.json
+  output_excel: output/泛化结果.xlsx
+
+# ── Evolution Configuration ──
+# Used by the `evolve` command (requires hermes-agent-self-evolution)
+evolution:
+  enabled: false
+  iterations: 10
+  population_size: 5
+  eval_sample_size: 20
+  optimizer_model: openai/gpt-4.1
+  eval_model: openai/gpt-4.1-mini
+
+# ── Hermes Agent Integration ──
+# When use_agent is true, the full hermes-agent AIAgent loop is used
+# instead of direct tool handler calls.
+hermes:
+  use_agent: false
+  toolsets:
+    - cockpit-data
+  skills:
+    - cockpit-utterance-synthesis
+    - cockpit-utterance-validation

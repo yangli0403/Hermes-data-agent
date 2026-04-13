@@ -1,0 +1,1 @@
+{"prompt": "Use the cockpit_batch_synthesize tool to process 'data/数据处理测试.xlsx'. Generate 5 variants per utterance with validation enabled. Save to output/batch_run_001.json", "metadata": {"run_id": "batch_001", "description": "Full dataset synthesis run"}}
