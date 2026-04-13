@@ -25,6 +25,28 @@ io:
   output_json: output/泛化结果.json
   output_excel: output/泛化结果.xlsx
 
+# ── Batch Runner Configuration (NEW) ──
+# Used by the `batch` command. Leverages hermes-agent's BatchRunner for
+# parallel processing with checkpointing and trajectory saving.
+batch:
+  run_name: cockpit_run
+  workers: 4                  # Parallel worker count
+  batch_size: 5               # Prompts per batch
+  resume: false               # Resume from checkpoint
+  dataset_dir: data           # Directory for JSONL datasets and checkpoints
+  trajectory_format: jsonl    # Trajectory output format
+
+# ── Delegation Configuration (NEW) ──
+# Used by the `--use-delegate` flag. Leverages hermes-agent's delegate_tool
+# to spawn child agents for synthesis and validation.
+delegation:
+  enabled: true
+  max_concurrent_children: 3  # Max parallel child agents (hermes-agent default)
+  max_iterations: 10          # Max tool-calling turns per child agent
+  max_retries: 3              # Max validation retry rounds
+  # model: gpt-4.1-mini      # Override child agent model (inherits parent by default)
+  # provider: null            # Override child agent provider
+
 # ── Evolution Configuration ──
 # Used by the `evolve` command (requires hermes-agent-self-evolution)
 evolution:
@@ -40,8 +62,11 @@ evolution:
 # instead of direct tool handler calls.
 hermes:
   use_agent: false
+  use_delegate: false
   toolsets:
     - cockpit-data
+    - delegation
   skills:
     - cockpit-utterance-synthesis
     - cockpit-utterance-validation
+    - cockpit-delegation-orchestrator
