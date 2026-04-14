@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -44,6 +45,8 @@ class LLMClient:
         """返回累计 API 调用次数。"""
         return self._call_count
 
+    # ---- 公共方法 --------------------------------------------------------
+
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -66,7 +69,8 @@ class LLMClient:
         异常:
             RuntimeError: 重试耗尽后仍然失败
         """
-        raise NotImplementedError("将在第4阶段实现")
+        use_model = model or self._model
+        return self._call_with_retry(messages, use_model, temperature, max_tokens)
 
     def chat_json(
         self,
@@ -92,13 +96,30 @@ class LLMClient:
             RuntimeError: 重试耗尽后仍然失败
             json.JSONDecodeError: 响应无法解析为 JSON
         """
-        raise NotImplementedError("将在第4阶段实现")
+        # 在消息中注入 JSON 输出要求
+        json_messages = list(messages)
+        if json_messages and json_messages[0]["role"] == "system":
+            json_messages[0] = {
+                "role": "system",
+                "content": json_messages[0]["content"]
+                + "\n\n请严格以 JSON 格式输出结果，不要包含任何其他文本。",
+            }
+        else:
+            json_messages.insert(0, {
+                "role": "system",
+                "content": "请严格以 JSON 格式输出结果，不要包含任何其他文本。",
+            })
+
+        raw = self.chat(json_messages, model=model, temperature=temperature, max_tokens=2000)
+        return self._extract_json(raw)
 
     # ---- 内部方法 --------------------------------------------------------
 
     def _get_client(self) -> OpenAI:
         """延迟初始化 OpenAI 客户端。"""
-        raise NotImplementedError
+        if self._client is None:
+            self._client = OpenAI()
+        return self._client
 
     def _call_with_retry(
         self,
@@ -108,8 +129,72 @@ class LLMClient:
         max_tokens: int,
     ) -> str:
         """带重试的 API 调用（指数退避）。"""
-        raise NotImplementedError
+        client = self._get_client()
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, self._max_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                self._call_count += 1
+                content = response.choices[0].message.content or ""
+                logger.debug(
+                    "LLM 调用成功 (model=%s, attempt=%d, tokens=%s)",
+                    model, attempt,
+                    getattr(response.usage, "total_tokens", "N/A"),
+                )
+                return content.strip()
+            except Exception as e:
+                last_error = e
+                wait = self._retry_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    "LLM 调用失败 (attempt=%d/%d, model=%s): %s — 等待 %.1fs 后重试",
+                    attempt, self._max_retries, model, e, wait,
+                )
+                time.sleep(wait)
+
+        raise RuntimeError(
+            f"LLM 调用在 {self._max_retries} 次重试后仍然失败: {last_error}"
+        )
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         """从 LLM 响应文本中提取 JSON 对象。"""
-        raise NotImplementedError
+        # 尝试直接解析
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试提取 ```json ... ``` 代码块
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 尝试提取第一个 { ... } 块
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # 尝试提取第一个 [ ... ] 块（数组）
+        match = re.search(r"\[.*\]", text, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                return {"items": parsed}
+            except json.JSONDecodeError:
+                pass
+
+        raise json.JSONDecodeError(
+            f"无法从 LLM 响应中提取 JSON: {text[:200]}...", text, 0
+        )

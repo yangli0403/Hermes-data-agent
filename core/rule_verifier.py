@@ -98,7 +98,29 @@ class RuleVerifier:
         返回:
             验证结果
         """
-        raise NotImplementedError("将在第4阶段实现")
+        # 依次检查各规则，任一失败则立即返回
+        checks = [
+            self._check_empty(variant),
+            self._check_length(variant),
+            self._check_constraints(variant),
+            self._check_params(variant, seed),
+        ]
+
+        for failure_reason in checks:
+            if failure_reason is not None:
+                return StageResult(
+                    stage="rule",
+                    passed=False,
+                    score=0.0,
+                    reason=failure_reason,
+                )
+
+        return StageResult(
+            stage="rule",
+            passed=True,
+            score=1.0,
+            reason="参数完整，长度合规，无约束违规",
+        )
 
     def verify_batch(
         self, variants: List[str], seed: Seed
@@ -113,18 +135,53 @@ class RuleVerifier:
         返回:
             验证结果列表
         """
-        raise NotImplementedError("将在第4阶段实现")
+        return [self.verify(v, seed) for v in variants]
 
     # ---- 内部方法 --------------------------------------------------------
 
+    def _check_empty(self, variant: str) -> Optional[str]:
+        """检查是否为空。"""
+        if not variant or not variant.strip():
+            return "变体内容为空"
+        return None
+
     def _check_length(self, variant: str) -> Optional[str]:
         """检查长度约束，返回失败原因或 None。"""
-        raise NotImplementedError
+        length = len(variant.strip())
+        if length < self._min_length:
+            return f"变体过短（{length} 字符 < 最小 {self._min_length}）"
+        if length > self._max_length:
+            return f"变体过长（{length} 字符 > 最大 {self._max_length}）"
+        return None
 
     def _check_params(self, variant: str, seed: Seed) -> Optional[str]:
         """检查参数完整性，返回失败原因或 None。"""
-        raise NotImplementedError
+        if not seed.params:
+            return None
+
+        # 对于每个关键参数值，检查是否在变体中出现
+        missing = []
+        for key, value in seed.params.items():
+            value_str = str(value)
+            if value_str and value_str not in variant:
+                missing.append(f"{key}={value_str}")
+
+        if missing:
+            return f"缺少关键参数: {', '.join(missing)}"
+        return None
 
     def _check_constraints(self, variant: str) -> Optional[str]:
         """检查车辆约束规则，返回失败原因或 None。"""
-        raise NotImplementedError
+        for constraint in self._constraints:
+            pattern = constraint.get("pattern", "")
+            condition = constraint.get("condition", "always")
+
+            # 跳过空变体检查（已在 _check_empty 中处理）
+            if constraint.get("name") == "空变体":
+                continue
+
+            if condition == "always" or condition == "driving":
+                if re.search(pattern, variant):
+                    return f"违反车辆约束[{constraint['name']}]: {constraint['message']}"
+
+        return None

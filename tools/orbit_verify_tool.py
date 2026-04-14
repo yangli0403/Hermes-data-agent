@@ -6,12 +6,15 @@ ORBIT 级联验证工具 — Hermes 工具层封装。
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Dict, List
 
 from core.cascade_orchestrator import CascadeOrchestrator, VerificationResult
+from core.rule_verifier import RuleVerifier
+from core.semantic_verifier import SemanticVerifier
+from core.safety_verifier import SafetyVerifier
 from core.seed_engine import Seed
+from core.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # 工具 handler
 # ---------------------------------------------------------------------------
+
+def _build_orchestrator(params: Dict[str, Any]) -> CascadeOrchestrator:
+    """根据参数构建级联编排器。"""
+    model_semantic = params.get("model_semantic", "gpt-4.1-mini")
+    model_safety = params.get("model_safety", "gpt-4.1-nano")
+
+    llm_semantic = LLMClient(model=model_semantic)
+    llm_safety = LLMClient(model=model_safety)
+
+    return CascadeOrchestrator(
+        rule_verifier=RuleVerifier(),
+        semantic_verifier=SemanticVerifier(llm_client=llm_semantic, model=model_semantic),
+        safety_verifier=SafetyVerifier(llm_client=llm_safety, model=model_safety),
+    )
+
 
 def handle_orbit_verify(params: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -40,7 +58,18 @@ def handle_orbit_verify(params: Dict[str, Any]) -> Dict[str, Any]:
             "safety_check": {...},
         }
     """
-    raise NotImplementedError("将在第4阶段实现")
+    try:
+        variant = params.get("variant", "")
+        seed_data = params.get("seed", {})
+        seed = Seed.from_dict(seed_data)
+
+        orchestrator = _build_orchestrator(params)
+        result = orchestrator.verify(variant, seed)
+
+        return result.to_dict()
+    except Exception as e:
+        logger.error("验证失败: %s", e)
+        return {"error": str(e)}
 
 
 def handle_orbit_batch_verify(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -50,6 +79,8 @@ def handle_orbit_batch_verify(params: Dict[str, Any]) -> Dict[str, Any]:
     参数 (params):
         variants (list): 变体列表
         seed (dict): 对应的种子对象
+        model_semantic (str, 可选): 语义验证模型
+        model_safety (str, 可选): 安全验证模型
 
     返回:
         {
@@ -60,7 +91,28 @@ def handle_orbit_batch_verify(params: Dict[str, Any]) -> Dict[str, Any]:
             "pass_rate": float,
         }
     """
-    raise NotImplementedError("将在第4阶段实现")
+    try:
+        variants = params.get("variants", [])
+        seed_data = params.get("seed", {})
+        seed = Seed.from_dict(seed_data)
+
+        orchestrator = _build_orchestrator(params)
+        results = orchestrator.verify_batch(variants, seed)
+
+        output = [r.to_dict() for r in results]
+        passed = sum(1 for r in results if r.overall_passed)
+        total = len(results)
+
+        return {
+            "results": output,
+            "total": total,
+            "passed": passed,
+            "failed": total - passed,
+            "pass_rate": round(passed / total, 3) if total > 0 else 0.0,
+        }
+    except Exception as e:
+        logger.error("批量验证失败: %s", e)
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +164,8 @@ try:
                 "properties": {
                     "variants": {"type": "array", "items": {"type": "string"}},
                     "seed": {"type": "object"},
+                    "model_semantic": {"type": "string"},
+                    "model_safety": {"type": "string"},
                 },
                 "required": ["variants", "seed"],
             },

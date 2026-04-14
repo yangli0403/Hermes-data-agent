@@ -9,7 +9,8 @@ from core.generalization_engine import GeneralizationEngine, GeneralizationResul
 from core.rule_verifier import RuleVerifier
 from core.semantic_verifier import SemanticVerifier
 from core.safety_verifier import SafetyVerifier
-from core.cascade_orchestrator import CascadeOrchestrator, VerificationResult, StageResult
+from core.cascade_orchestrator import CascadeOrchestrator, VerificationResult
+from core.rule_verifier import StageResult
 from core.llm_client import LLMClient
 from core.provenance_tracker import ProvenanceTracker, OrbitRecord
 from core.config_loader import ConfigLoader

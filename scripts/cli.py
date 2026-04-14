@@ -68,6 +68,11 @@ from tools.cockpit_synthesis_tool import (
     handle_cockpit_batch_synthesize,
 )
 
+# ORBIT tool handlers
+from tools.orbit_seed_tool import handle_orbit_seed_generate
+from tools.orbit_generalize_tool import handle_orbit_generalize, handle_orbit_batch_generalize
+from tools.orbit_verify_tool import handle_orbit_verify, handle_orbit_batch_verify
+
 
 def setup_logging(verbose: bool = False):
     logging.basicConfig(
@@ -359,6 +364,188 @@ def evolve(skill, iterations, eval_source, dataset, optimizer_model,
 
 
 # =====================================================================
+# Command: orbit (NEW — Car-ORBIT-Agent pipeline)
+# =====================================================================
+
+@main.command()
+@click.option("--config", "-c", "config_path", default=None,
+              help="Vehicle function tree config (YAML/JSON)")
+@click.option("--input", "-i", "input_path", default=None,
+              help="Input Excel file (alternative to --config)")
+@click.option("--output-dir", "-o", default="output/orbit",
+              help="Output directory")
+@click.option("--variants", "-n", default=5, type=int,
+              help="Variants per seed")
+@click.option("--limit", "-l", default=None, type=int,
+              help="Limit seeds (for testing)")
+@click.option("--model", "-m", default="gpt-4.1-mini",
+              help="Generalization model")
+@click.option("--skip-verify", is_flag=True,
+              help="Skip cascade verification")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose logging")
+def orbit(config_path, input_path, output_dir, variants, limit, model,
+          skip_verify, verbose):
+    """Run Car-ORBIT-Agent pipeline: seed → generalize → cascade verify."""
+    setup_logging(verbose)
+
+    if not config_path and not input_path:
+        console.print("[red]Error: must provide --config or --input[/red]")
+        sys.exit(1)
+
+    from core.config_loader import ConfigLoader
+    from core.seed_engine import SeedEngine
+    from core.generalization_engine import GeneralizationEngine
+    from core.cascade_orchestrator import CascadeOrchestrator
+    from core.rule_verifier import RuleVerifier
+    from core.semantic_verifier import SemanticVerifier
+    from core.safety_verifier import SafetyVerifier
+    from core.llm_client import LLMClient
+    from core.provenance_tracker import ProvenanceTracker
+    from scripts.orbit_dataset_adapter import OrbitDatasetAdapter
+
+    # ── 初始化 ──────────────────────────────────────────────────────
+    config_loader = ConfigLoader()
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    tracker = ProvenanceTracker(
+        trace_path=str(output_path / "orbit_trace.jsonl")
+    )
+
+    console.print(Panel.fit(
+        f"[bold cyan]Car-ORBIT-Agent Pipeline[/bold cyan]\n"
+        f"Config: {config_path or 'N/A'}\n"
+        f"Excel:  {input_path or 'N/A'}\n"
+        f"Variants: {variants}\n"
+        f"Model: {model}\n"
+        f"Verify: {'disabled' if skip_verify else 'enabled'}\n"
+        f"Output: {output_dir}",
+        title="ORBIT Configuration",
+    ))
+
+    # ── 阶段1: 种子生成 ──────────────────────────────────────────────
+    console.print("\n[bold]Stage 1: Seed Generation[/bold]")
+    engine = SeedEngine(config_loader=config_loader)
+
+    if config_path:
+        seeds = engine.generate_from_config(config_path, max_seeds=limit or 1000)
+    else:
+        seeds = engine.extract_from_excel(input_path)
+
+    if limit:
+        seeds = seeds[:limit]
+
+    for s in seeds:
+        tracker.record_seed(s)
+
+    console.print(f"  Generated [green]{len(seeds)}[/green] seeds")
+
+    # ── 阶段2: 多维度泛化 ────────────────────────────────────────────
+    console.print("\n[bold]Stage 2: Multi-Dimension Generalization[/bold]")
+    llm_gen = LLMClient(model=model)
+    gen_engine = GeneralizationEngine(
+        llm_client=llm_gen, provenance_tracker=tracker, model=model
+    )
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Generalizing...", total=len(seeds))
+        gen_results = []
+        for seed in seeds:
+            result = gen_engine.generalize(seed, num_variants=variants)
+            gen_results.append(result)
+            progress.advance(task)
+
+    total_variants = sum(len(r.variants) for r in gen_results)
+    console.print(f"  Generated [green]{total_variants}[/green] variants from {len(seeds)} seeds")
+
+    # ── 阶段3: 级联验证 ──────────────────────────────────────────────
+    if not skip_verify:
+        console.print("\n[bold]Stage 3: Cascade Verification[/bold]")
+        llm_sem = LLMClient(model=model)
+        llm_safe = LLMClient(model="gpt-4.1-nano")
+
+        orchestrator = CascadeOrchestrator(
+            rule_verifier=RuleVerifier(),
+            semantic_verifier=SemanticVerifier(llm_client=llm_sem, model=model),
+            safety_verifier=SafetyVerifier(llm_client=llm_safe, model="gpt-4.1-nano"),
+            provenance_tracker=tracker,
+        )
+
+        all_records = []
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Verifying...", total=total_variants)
+            for gen_result in gen_results:
+                for variant in gen_result.variants:
+                    ver_result = orchestrator.verify(variant, gen_result.seed)
+                    record = tracker.build_record(
+                        seed=gen_result.seed,
+                        variant=variant,
+                        gen_metadata={
+                            "dimensions": gen_result.dimensions_used,
+                            "model": gen_result.llm_model,
+                        },
+                        ver_result=ver_result.to_dict(),
+                    )
+                    all_records.append(record)
+                    progress.advance(task)
+    else:
+        console.print("\n[bold]Stage 3: Verification [yellow]SKIPPED[/yellow][/bold]")
+        all_records = []
+        for gen_result in gen_results:
+            for variant in gen_result.variants:
+                record = tracker.build_record(
+                    seed=gen_result.seed,
+                    variant=variant,
+                    gen_metadata={
+                        "dimensions": gen_result.dimensions_used,
+                        "model": gen_result.llm_model,
+                    },
+                    ver_result={
+                        "overall_passed": True,
+                        "confidence_score": 0.0,
+                        "rule_check": {"stage": "rule", "passed": True, "score": 1.0, "reason": "skipped"},
+                    },
+                )
+                all_records.append(record)
+
+    # ── 阶段4: 输出 ──────────────────────────────────────────────────
+    console.print("\n[bold]Stage 4: Export Results[/bold]")
+    adapter = OrbitDatasetAdapter()
+
+    json_path = adapter.to_json(all_records, str(output_path / "orbit_results.json"))
+    jsonl_path = adapter.to_jsonl(all_records, str(output_path / "orbit_results.jsonl"))
+    excel_path = adapter.to_excel(all_records, str(output_path / "orbit_results.xlsx"))
+    tracker.save_trace()
+
+    summary = adapter.generate_summary(all_records)
+
+    # 结果表格
+    table = Table(title="ORBIT Pipeline Results")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("Total Seeds", str(len(seeds)))
+    table.add_row("Total Variants", str(summary["total_records"]))
+    table.add_row("Passed", str(summary["total_passed"]))
+    table.add_row("Rejected", str(summary["total_rejected"]))
+    table.add_row("Pass Rate", f"{summary['pass_rate']:.1%}")
+    table.add_row("Avg Confidence", f"{summary['avg_confidence']:.3f}")
+    table.add_row("JSON Output", json_path)
+    table.add_row("JSONL Output", jsonl_path)
+    table.add_row("Excel Output", excel_path)
+    console.print(table)
+
+    console.print("\n[green bold]ORBIT pipeline completed successfully![/green bold]")
+
+
+# =====================================================================
 # Command: info
 # =====================================================================
 
@@ -432,7 +619,12 @@ def info():
     tool_table.add_row("cockpit_validate", "cockpit-data", "Variant quality validation")
     tool_table.add_row("cockpit_batch_synthesize", "cockpit-data", "Batch synthesis from Excel")
     tool_table.add_row("cockpit_delegate_synthesize", "cockpit-data",
-                       "Delegated synthesis with Agent-level validation [NEW]")
+                       "Delegated synthesis with Agent-level validation")
+    tool_table.add_row("orbit_seed_generate", "orbit", "ORBIT seed generation from config/Excel [NEW]")
+    tool_table.add_row("orbit_generalize", "orbit", "Multi-dimension variant generalization [NEW]")
+    tool_table.add_row("orbit_batch_generalize", "orbit", "Batch multi-dimension generalization [NEW]")
+    tool_table.add_row("orbit_verify", "orbit", "Cascade verification (rule→semantic→safety) [NEW]")
+    tool_table.add_row("orbit_batch_verify", "orbit", "Batch cascade verification [NEW]")
     console.print(tool_table)
 
     # Modes
@@ -445,7 +637,9 @@ def info():
     mode_table.add_row("Delegate", "synthesize --use-delegate -i ...",
                        "Agent + delegate_task for validation [NEW]")
     mode_table.add_row("Batch", "batch -i ... -r run_name",
-                       "BatchRunner parallel + checkpoint [NEW]")
+                       "BatchRunner parallel + checkpoint")
+    mode_table.add_row("ORBIT", "orbit -c config.yaml",
+                       "Car-ORBIT-Agent pipeline: seed→generalize→verify [NEW]")
     console.print(mode_table)
 
 

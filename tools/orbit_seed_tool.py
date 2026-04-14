@@ -6,9 +6,8 @@ ORBIT 种子生成工具 — Hermes 工具层封装。
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from core.seed_engine import SeedEngine, Seed
 from core.config_loader import ConfigLoader
@@ -32,12 +31,38 @@ def handle_orbit_seed_generate(params: Dict[str, Any]) -> Dict[str, Any]:
 
     返回:
         {
-            "seeds": [...],         # 种子列表
-            "total_count": int,     # 总种子数
-            "source_type": str,     # "config" | "excel"
+            "seeds": [...],
+            "total_count": int,
+            "source_type": str,
         }
     """
-    raise NotImplementedError("将在第4阶段实现")
+    try:
+        engine = SeedEngine()
+        config_path = params.get("config_path")
+        excel_path = params.get("excel_path")
+        max_seeds = params.get("max_seeds", 1000)
+        limit = params.get("limit")
+
+        if config_path:
+            seeds = engine.generate_from_config(config_path, max_seeds=max_seeds)
+            source_type = "config"
+        elif excel_path:
+            seeds = engine.extract_from_excel(excel_path)
+            source_type = "excel"
+        else:
+            return {"error": "必须提供 config_path 或 excel_path 参数"}
+
+        if limit and limit > 0:
+            seeds = seeds[:limit]
+
+        return {
+            "seeds": [s.to_dict() for s in seeds],
+            "total_count": len(seeds),
+            "source_type": source_type,
+        }
+    except Exception as e:
+        logger.error("种子生成失败: %s", e)
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------

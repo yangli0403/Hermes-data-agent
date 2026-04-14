@@ -32,8 +32,8 @@ class VerificationResult:
 
     variant: str
     rule_check: StageResult
-    semantic_check: Optional[StageResult] = None   # 可能被跳过
-    safety_check: Optional[StageResult] = None      # 可能被跳过
+    semantic_check: Optional[StageResult] = None
+    safety_check: Optional[StageResult] = None
     overall_passed: bool = False
     confidence_score: float = 0.0
 
@@ -95,7 +95,61 @@ class CascadeOrchestrator:
         返回:
             完整的级联验证结果
         """
-        raise NotImplementedError("将在第4阶段实现")
+        # 第一层：规则验证（零成本）
+        rule_result = self._rule.verify(variant, seed)
+
+        if not rule_result.passed:
+            result = VerificationResult(
+                variant=variant,
+                rule_check=rule_result,
+                semantic_check=None,
+                safety_check=None,
+                overall_passed=False,
+                confidence_score=0.0,
+            )
+            self._record_verification(seed, variant, result)
+            logger.debug("规则验证失败: '%s' — %s", variant, rule_result.reason)
+            return result
+
+        # 第二层：语义验证（LLM 调用）
+        semantic_result = self._semantic.verify(variant, seed)
+
+        if not semantic_result.passed:
+            confidence = self._compute_confidence(rule_result, semantic_result, None)
+            result = VerificationResult(
+                variant=variant,
+                rule_check=rule_result,
+                semantic_check=semantic_result,
+                safety_check=None,
+                overall_passed=False,
+                confidence_score=confidence,
+            )
+            self._record_verification(seed, variant, result)
+            logger.debug("语义验证失败: '%s' — %s", variant, semantic_result.reason)
+            return result
+
+        # 第三层：安全验证（LLM 调用）
+        safety_result = self._safety.verify(variant, seed)
+
+        confidence = self._compute_confidence(rule_result, semantic_result, safety_result)
+        overall_passed = safety_result.passed
+
+        result = VerificationResult(
+            variant=variant,
+            rule_check=rule_result,
+            semantic_check=semantic_result,
+            safety_check=safety_result,
+            overall_passed=overall_passed,
+            confidence_score=confidence,
+        )
+        self._record_verification(seed, variant, result)
+
+        if overall_passed:
+            logger.debug("验证通过: '%s' (置信度=%.3f)", variant, confidence)
+        else:
+            logger.debug("安全验证失败: '%s' — %s", variant, safety_result.reason)
+
+        return result
 
     def verify_batch(
         self, variants: List[str], seed: Seed
@@ -110,7 +164,12 @@ class CascadeOrchestrator:
         返回:
             验证结果列表
         """
-        raise NotImplementedError("将在第4阶段实现")
+        results = []
+        for i, variant in enumerate(variants):
+            logger.info("级联验证进度: %d/%d", i + 1, len(variants))
+            result = self.verify(variant, seed)
+            results.append(result)
+        return results
 
     # ---- 内部方法 --------------------------------------------------------
 
@@ -126,4 +185,23 @@ class CascadeOrchestrator:
         计算公式：
           confidence = rule_score * 0.2 + semantic_score * 0.4 + safety_score * 0.4
         """
-        raise NotImplementedError
+        rule_score = rule_result.score
+        semantic_score = semantic_result.score if semantic_result else 0.0
+        safety_score = safety_result.score if safety_result else 0.0
+
+        confidence = rule_score * 0.2 + semantic_score * 0.4 + safety_score * 0.4
+        return round(confidence, 3)
+
+    def _record_verification(
+        self,
+        seed: Seed,
+        variant: str,
+        result: VerificationResult,
+    ) -> None:
+        """记录验证结果到追踪器。"""
+        if self._tracker:
+            self._tracker.record_verification(
+                seed=seed,
+                variant=variant,
+                verification_result=result.to_dict(),
+            )

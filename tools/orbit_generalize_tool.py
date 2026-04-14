@@ -6,7 +6,6 @@ ORBIT 多维度泛化工具 — Hermes 工具层封装。
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Dict, List
 
@@ -33,13 +32,32 @@ def handle_orbit_generalize(params: Dict[str, Any]) -> Dict[str, Any]:
 
     返回:
         {
-            "variants": [...],              # 变体列表
-            "generation_strategies": [...], # 生成策略
-            "dimensions_used": [...],       # 使用的维度
-            "count": int,                   # 变体数量
+            "variants": [...],
+            "generation_strategies": [...],
+            "dimensions_used": [...],
+            "count": int,
         }
     """
-    raise NotImplementedError("将在第4阶段实现")
+    try:
+        seed_data = params.get("seed", {})
+        seed = Seed.from_dict(seed_data)
+        num_variants = params.get("num_variants", 5)
+        dimensions = params.get("dimensions")
+        model = params.get("model", "gpt-4.1-mini")
+
+        llm = LLMClient(model=model)
+        engine = GeneralizationEngine(llm_client=llm, model=model)
+        result = engine.generalize(seed, num_variants=num_variants, dimensions=dimensions)
+
+        return {
+            "variants": result.variants,
+            "generation_strategies": result.generation_strategies,
+            "dimensions_used": result.dimensions_used,
+            "count": len(result.variants),
+        }
+    except Exception as e:
+        logger.error("泛化失败: %s", e)
+        return {"error": str(e)}
 
 
 def handle_orbit_batch_generalize(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -54,12 +72,40 @@ def handle_orbit_batch_generalize(params: Dict[str, Any]) -> Dict[str, Any]:
 
     返回:
         {
-            "results": [...],       # GeneralizationResult 列表
-            "total_variants": int,  # 总变体数量
-            "total_seeds": int,     # 处理的种子数量
+            "results": [...],
+            "total_variants": int,
+            "total_seeds": int,
         }
     """
-    raise NotImplementedError("将在第4阶段实现")
+    try:
+        seeds_data = params.get("seeds", [])
+        seeds = [Seed.from_dict(s) for s in seeds_data]
+        num_variants = params.get("num_variants", 5)
+        dimensions = params.get("dimensions")
+        model = params.get("model", "gpt-4.1-mini")
+
+        llm = LLMClient(model=model)
+        engine = GeneralizationEngine(llm_client=llm, model=model)
+        results = engine.generalize_batch(seeds, num_variants=num_variants, dimensions=dimensions)
+
+        output = []
+        total_variants = 0
+        for r in results:
+            output.append({
+                "seed_id": r.seed.seed_id,
+                "variants": r.variants,
+                "num_generated": len(r.variants),
+            })
+            total_variants += len(r.variants)
+
+        return {
+            "results": output,
+            "total_variants": total_variants,
+            "total_seeds": len(seeds),
+        }
+    except Exception as e:
+        logger.error("批量泛化失败: %s", e)
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------
