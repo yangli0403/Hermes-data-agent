@@ -1,0 +1,68 @@
+graph TD
+    subgraph CLI["CLI 入口层"]
+        CLI_ORBIT["cli.py — orbit 子命令"]
+    end
+
+    subgraph SKILL["技能层"]
+        SKILL_ORCH["car-orbit-synthesis<br/>SKILL.md<br/>(编排技能)"]
+    end
+
+    subgraph TOOLS["工具层"]
+        SEED["orbit_seed_tool<br/>种子生成"]
+        GEN["orbit_generalize_tool<br/>多维度泛化"]
+        VERIFY["orbit_verify_tool<br/>级联验证"]
+    end
+
+    subgraph CORE["核心引擎层"]
+        SEED_ENG["SeedEngine<br/>功能树解析 / Excel 提取<br/>组合策略"]
+        GEN_ENG["GeneralizationEngine<br/>Prompt 构建 / LLM 调用<br/>维度管理"]
+        RULE_V["RuleVerifier<br/>参数完整性 / 长度约束<br/>车辆约束规则"]
+        SEM_V["SemanticVerifier<br/>语义一致性 / 自然度<br/>LLM 评判"]
+        SAFE_V["SafetyVerifier<br/>驾驶安全 / 法规合规<br/>LLM 评判"]
+        CASCADE["CascadeOrchestrator<br/>级联编排 / 置信度汇总"]
+    end
+
+    subgraph INFRA["基础设施层"]
+        LLM["LLMClient<br/>OpenAI 兼容 API<br/>重试 / 回退"]
+        PROV["ProvenanceTracker<br/>来源链 / 验证链<br/>JSONL 轨迹"]
+        CFG["ConfigLoader<br/>YAML 配置<br/>default.yaml"]
+    end
+
+    subgraph ADAPTER["适配器层"]
+        TS_ADAPT["toolset_adapter<br/>car-orbit 工具集注册"]
+        DS_ADAPT["orbit_dataset_adapter<br/>输出格式转换"]
+    end
+
+    subgraph OUTPUT["输出"]
+        JSON_OUT["JSON / JSONL"]
+        EXCEL_OUT["Excel"]
+        STATS["统计摘要"]
+    end
+
+    CLI_ORBIT --> SKILL_ORCH
+    SKILL_ORCH --> SEED
+    SKILL_ORCH --> GEN
+    SKILL_ORCH --> VERIFY
+
+    SEED --> SEED_ENG
+    GEN --> GEN_ENG
+    VERIFY --> CASCADE
+
+    CASCADE --> RULE_V
+    CASCADE --> SEM_V
+    CASCADE --> SAFE_V
+
+    SEED_ENG --> CFG
+    GEN_ENG --> LLM
+    SEM_V --> LLM
+    SAFE_V --> LLM
+
+    CASCADE --> PROV
+    GEN_ENG --> PROV
+
+    DS_ADAPT --> JSON_OUT
+    DS_ADAPT --> EXCEL_OUT
+    DS_ADAPT --> STATS
+
+    PROV --> DS_ADAPT
+    TS_ADAPT -.->|注册| TOOLS
