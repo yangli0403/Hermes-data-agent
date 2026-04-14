@@ -1,58 +1,57 @@
 # Hermes Data Agent
 
-> 基于 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) 构建的座舱 AI 语音助手话术泛化数据合成系统。
+> 基于 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) 构建的 Agent 化数据合成平台，支持文本 NLU 和视觉 VLM 双轨训练数据自动化生成。
 
 本项目是 [cockpit-data-synthesis](https://github.com/yangli0403/cockpit-data-synthesis) 的 Agent 化升级版本，通过复用 Hermes Agent 生态的核心能力（技能系统、工具注册、子代理委托、批量处理、自我进化），将原有的 Python 脚本提升为一个可扩展的 Agent 驱动数据合成平台。
 
 ## 架构概览
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Hermes Data Agent v0.3.0                      │
-│                                                                 │
-│  ┌──────────┐   ┌──────────────┐   ┌────────────────────────┐  │
-│  │ CLI 入口  │──▶│ 模式选择器    │──▶│ Standalone / Agent /   │  │
-│  │ (click)  │   │              │   │ Delegate / Batch /     │  │
-│  │          │   │              │   │ ORBIT [NEW]            │  │
-│  └──────────┘   └──────────────┘   └────────────────────────┘  │
-│                                            │                    │
-│         ┌──────────────────────────────────┼──────────┐        │
-│         ▼                                  ▼          ▼        │
-│  ┌─────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │ 自定义工具   │  │ hermes-agent     │  │ Car-ORBIT-Agent  │  │
-│  │ (ToolRegistry│  │ BatchRunner      │  │ (种子→泛化→     │  │
-│  │  注册模式)   │  │ (并行+断点续传)  │  │  级联验证流水线) │  │
-│  └─────────────┘  └──────────────────┘  └──────────────────┘  │
-│         │                  │                      │            │
-│         ▼                  ▼                      ▼            │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │              SKILL.md 技能文件 (Hermes 格式)              │  │
-│  │  • cockpit-utterance-synthesis   (泛化技能)              │  │
-│  │  • cockpit-utterance-validation  (验证技能)              │  │
-│  │  • cockpit-delegation-orchestrator (委托编排技能)         │  │
-│  │  • car-orbit-synthesis [NEW]     (ORBIT 流水线技能)      │  │
-│  └─────────────────────────────────────────────────────────┘  │
-│                           │                                    │
-│                           ▼                                    │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │         hermes-agent-self-evolution (GEPA)               │  │
-│  │         Prompt 自我进化优化                               │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Hermes Data Agent v0.3.0                          │
+│                                                                     │
+│  ┌──────────┐   ┌──────────────┐   ┌──────────────────────────┐    │
+│  │ CLI 入口  │──▶│ 模式选择器    │──▶│ Standalone / Agent /     │    │
+│  │ (click)  │   │              │   │ Delegate / Batch /       │    │
+│  │          │   │              │   │ ORBIT / VLM [NEW]        │    │
+│  └──────────┘   └──────────────┘   └──────────────────────────┘    │
+│                                            │                        │
+│         ┌──────────────────────────────────┼──────────────┐        │
+│         ▼                                  ▼              ▼        │
+│  ┌─────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
+│  │ Car-ORBIT   │  │ VLM-data-agent   │  │ hermes-agent         │  │
+│  │ Agent       │  │ [NEW]            │  │ BatchRunner          │  │
+│  │ (种子→泛化→ │  │ (种子→泛化→图像→ │  │ (并行+断点续传)      │  │
+│  │  级联验证)  │  │  三层验证)       │  │                      │  │
+│  └─────────────┘  └──────────────────┘  └──────────────────────┘  │
+│         │                  │                      │                │
+│         ▼                  ▼                      ▼                │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │              SKILL.md 技能文件 (Hermes 格式)                  │  │
+│  │  • car-orbit-synthesis           (ORBIT 流水线技能)          │  │
+│  │  • cockpit-utterance-synthesis   (泛化技能)                  │  │
+│  │  • cockpit-utterance-validation  (验证技能)                  │  │
+│  │  • cockpit-delegation-orchestrator (委托编排技能)             │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Car-ORBIT-Agent (v0.3.0 NEW)
+---
 
-借鉴 [ORBIT 框架](https://arxiv.org/abs/2501.xxxxx) 的核心方法论，为车载座舱语音助手构建的系统化数据合成 Agent。
+## 双轨数据合成链路
 
-### ORBIT 核心精髓
+### ORBIT 文本链路
+
+借鉴 [ORBIT 框架](https://arxiv.org/abs/2501.xxxxx) 的核心方法论，为车载座舱语音助手生成高质量话术变体数据。
+
+**核心精髓：**
 
 1. **系统化种子驱动** — 从车辆功能树 YAML 系统化生成功能种子，确保领域覆盖完整性
 2. **多维度泛化** — 沿口语化、句式变换、参数变化、简化省略、驾驶场景 5 个维度生成变体
 3. **级联验证** — 规则验证（零成本）→ 语义验证（LLM）→ 安全验证（LLM），采用短路策略节省 API 成本
 4. **完整可追溯性** — 每条数据记录来源链和验证链，支持 JSONL 轨迹文件
 
-### ORBIT 流水线
+**数据流：**
 
 ```
 功能树 YAML → SeedEngine → [Seed]
@@ -62,91 +61,37 @@
     → OrbitDatasetAdapter → JSON / JSONL / Excel
 ```
 
-### 使用方式
+### VLM 视觉链路 (v0.3.0 NEW)
 
-```bash
-# 完整 ORBIT 流水线
-python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml
+生成视觉问答（VQA）训练数据，包含图像生成、视觉理解和三层验证。
 
-# 测试前 5 个种子，每个生成 3 个变体
-python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml --limit 5 --variants 3
+**核心精髓：**
 
-# 跳过验证（快速测试泛化效果）
-python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml --skip-verify
+1. **视觉任务种子** — 从 YAML 配置生成结构化视觉任务种子（场景、实体、问题类型）
+2. **视觉泛化** — LLM 驱动的问答对生成和图像提示词生成
+3. **图像合成** — 调用 DALL-E 等模型生成图像
+4. **三层验证** — 结构校验（零成本）→ 文本自洽（LLM）→ 图像一致性（VLM），采用短路策略
+5. **双轨导出** — 训练 JSONL（OpenAI 格式）和审阅 Excel 双轨导出
 
-# 自定义输出目录和模型
-python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml \
-    --output-dir output/orbit_prod --model gpt-4.1-mini
+**数据流：**
+
 ```
-
-### 核心模块
-
-| 模块 | 文件 | 说明 |
-|------|------|------|
-| 种子引擎 | `core/seed_engine.py` | 从 YAML/Excel 功能树生成种子 |
-| 泛化引擎 | `core/generalization_engine.py` | 5 维度 LLM 泛化 |
-| 规则验证 | `core/rule_verifier.py` | 纯 Python 规则检查（零成本） |
-| 语义验证 | `core/semantic_verifier.py` | LLM 语义一致性评估 |
-| 安全验证 | `core/safety_verifier.py` | LLM 驾驶安全评估 |
-| 级联编排 | `core/cascade_orchestrator.py` | 三层级联验证编排 |
-| 来源追踪 | `core/provenance_tracker.py` | 来源链 + 验证链追踪 |
-| LLM 客户端 | `core/llm_client.py` | 统一 LLM 调用（重试、JSON 解析） |
-| 配置加载 | `core/config_loader.py` | 分层配置管理 |
+任务配置 YAML → VisualSeedEngine → [VisualSeed]
+    → VisualGeneralizationEngine → [VLMSample]
+    → ImageSynthesisCoordinator → [VLMSample + 图像]
+    → SchemaVerifier → ConsistencyVerifier → VisionConsistencyVerifier
+    → VLMRecord.from_sample()
+    → VLMDatasetAdapter → 训练 JSONL / 审阅 Excel
+```
 
 ---
-
-## Hermes 生态复用矩阵
-
-| 本项目组件 | 复用来源 | 复用方式 |
-|---|---|---|
-| `skills/*.md` | hermes-agent SKILL.md 格式 | 技能文件格式 + `skill_utils.py` 加载 |
-| `tools/cockpit_synthesis_tool.py` | hermes-agent `ToolRegistry.register()` | 工具注册模式 |
-| `tools/delegate_synthesis.py` | hermes-agent `delegate_task()` | 子代理委托 API |
-| `tools/toolset_adapter.py` | hermes-agent `toolsets.py` | 工具集注册 |
-| `tools/orbit_*_tool.py` **[NEW]** | hermes-agent `ToolRegistry.register()` | ORBIT 工具注册 |
-| `scripts/batch_synthesize.py` | hermes-agent `BatchRunner` | 并行批处理引擎 |
-| `scripts/dataset_adapter.py` | hermes-agent batch JSONL 格式 | 数据集格式适配 |
-| `scripts/evolve_cockpit_skill.py` | hermes-agent-self-evolution `evolve()` | GEPA 进化流程 |
-| `scripts/cli.py` (`--use-agent`) | hermes-agent `AIAgent` | 对话循环引擎 |
-
-## 五种执行模式
-
-### 1. Standalone 模式（默认）
-直接调用工具函数，无需安装 hermes-agent，开箱即用。
-```bash
-python scripts/cli.py synthesize -i data/数据处理测试.xlsx -n 5
-```
-
-### 2. Agent 模式
-通过 hermes-agent 的 `AIAgent` 驱动完整对话循环。
-```bash
-python scripts/cli.py synthesize --use-agent -i data/数据处理测试.xlsx -n 5
-```
-
-### 3. Delegate 模式
-通过 hermes-agent 的 `delegate_task` 派生子 Agent 进行验证闭环。
-```bash
-python scripts/cli.py synthesize --use-delegate -i data/数据处理测试.xlsx -n 5
-```
-
-### 4. Batch 模式
-通过 hermes-agent 的 `BatchRunner` 实现并行处理 + 断点续传。
-```bash
-python scripts/cli.py batch -i data/数据处理测试.xlsx -r my_run -w 4 -b 5
-```
-
-### 5. ORBIT 模式 (v0.3.0 NEW)
-通过 Car-ORBIT-Agent 执行系统化种子→泛化→级联验证流水线。
-```bash
-python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml --limit 5 --variants 3
-```
 
 ## 快速开始
 
 ### 安装
 
 ```bash
-# 基础安装（standalone + ORBIT 模式，无需 hermes-agent）
+# 基础安装（standalone + ORBIT + VLM 模式，无需 hermes-agent）
 pip install openpyxl pandas click rich pyyaml openai
 
 # 完整安装（包含 hermes-agent 集成）
@@ -158,132 +103,177 @@ pip install 'hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git
 
 ```bash
 # 查看系统信息和集成状态
-python scripts/cli.py info
+python3 scripts/cli.py info
 
-# 单线程合成（standalone）
-python scripts/cli.py synthesize -i data/数据处理测试.xlsx -n 5 --limit 10
-
-# ORBIT 流水线（系统化泛化 + 级联验证）
+# ── ORBIT 文本链路 ──
 python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml
+python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml --limit 5 --variants 3
+python3 scripts/cli.py orbit --config configs/orbit_vehicle_tree_sample.yaml --skip-verify
 
-# 并行批处理（4 workers）
-python scripts/cli.py batch -i data/数据处理测试.xlsx -r my_run -w 4
+# ── VLM 视觉链路 ──
+python3 scripts/cli.py vlm --config configs/vlm_task_sample.yaml
+python3 scripts/cli.py vlm --config configs/vlm_task_sample.yaml --limit 5
+python3 scripts/cli.py vlm --config configs/vlm_task_sample.yaml --skip-image
 
-# 带子代理验证闭环
-python scripts/cli.py synthesize --use-delegate -i data/数据处理测试.xlsx -n 5
-
-# 进化优化 SKILL.md
-python scripts/cli.py evolve --skill cockpit-utterance-synthesis --iterations 10
+# ── 其他模式 ──
+python3 scripts/cli.py synthesize -i data/数据处理测试.xlsx -n 5           # Standalone
+python3 scripts/cli.py synthesize --use-agent -i data/数据处理测试.xlsx    # Agent
+python3 scripts/cli.py batch -i data/数据处理测试.xlsx -r my_run -w 4     # Batch
 ```
+
+---
+
+## 核心模块
+
+### ORBIT 文本链路模块
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 种子引擎 | `core/seed_engine.py` | 从 YAML/Excel 功能树生成种子 |
+| 泛化引擎 | `core/generalization_engine.py` | 5 维度 LLM 泛化 |
+| 规则验证 | `core/rule_verifier.py` | 纯 Python 规则检查（零成本） |
+| 语义验证 | `core/semantic_verifier.py` | LLM 语义一致性评估 |
+| 安全验证 | `core/safety_verifier.py` | LLM 驾驶安全评估 |
+| 级联编排 | `core/cascade_orchestrator.py` | 三层级联验证编排 |
+| 来源追踪 | `core/provenance_tracker.py` | 来源链 + 验证链追踪 |
+| LLM 客户端 | `core/llm_client.py` | 统一 LLM 调用（重试、JSON 解析） |
+
+### VLM 视觉链路模块
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 数据契约 | `core/contracts.py` | VisualSeed、VLMSample、VLMRecord |
+| 图像客户端 | `core/image_client.py` | DALL-E 图像生成（重试、超时） |
+| VLM 客户端 | `core/vlm_client.py` | 视觉判定、一致性校验、图像描述 |
+| 客户端工厂 | `core/client_factory.py` | 统一创建 LLM/Image/VLM 客户端 |
+| 视觉种子引擎 | `core/visual_seed_engine.py` | 从 YAML 配置生成视觉任务种子 |
+| 视觉泛化引擎 | `core/visual_generalization_engine.py` | LLM 驱动的问答对和提示词生成 |
+| 图像合成协调器 | `core/image_synthesis_coordinator.py` | 图像生成调度和状态管理 |
+| 结构校验器 | `core/schema_verifier.py` | 零 API 成本的字段完整性校验 |
+| 文本自洽校验器 | `core/consistency_verifier.py` | LLM 驱动的文本一致性校验 |
+| 视觉一致性校验器 | `core/vision_consistency_verifier.py` | VLM 驱动的图像内容校验 |
+| VLM 管线编排器 | `core/vlm_pipeline_runner.py` | 端到端 VLM 流水线编排 |
+
+### 共用模块
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 配置加载 | `core/config_loader.py` | 分层配置管理（含 vlm 命名空间） |
+
+---
+
+## 测试
+
+项目采用三层测试策略（纯逻辑单元测试 + Mock 集成测试 + CLI 冒烟测试），全部 217 个测试在无真实 API 条件下通过，核心模块覆盖率 96%。
+
+```bash
+# 运行全部测试（217 个，无需 API Key）
+python3 -m pytest tests/ -v
+
+# 仅运行 VLM 测试（111 个）
+python3 -m pytest tests/test_vlm_*.py -v
+
+# 仅运行 ORBIT 测试（106 个）
+python3 -m pytest tests/test_orbit_*.py tests/test_tools.py -v
+
+# 覆盖率报告
+python3 -m pytest tests/ --cov=core --cov-report=term-missing
+```
+
+详细测试策略、用例清单和覆盖率数据请参阅 [TESTING.md](TESTING.md)。
+
+---
 
 ## 项目结构
 
 ```
 Hermes-data-agent/
-├── core/                                    # [NEW] ORBIT 核心引擎层
+├── core/                                    # 核心引擎层（ORBIT + VLM 双轨）
 │   ├── __init__.py                          # 公共接口导出
-│   ├── config_loader.py                     # 配置加载器
-│   ├── llm_client.py                        # LLM 客户端（重试、JSON 解析）
-│   ├── seed_engine.py                       # 种子生成引擎
-│   ├── generalization_engine.py             # 多维度泛化引擎
-│   ├── rule_verifier.py                     # 规则验证器（纯 Python）
-│   ├── semantic_verifier.py                 # 语义验证器（LLM）
-│   ├── safety_verifier.py                   # 安全验证器（LLM）
-│   ├── cascade_orchestrator.py              # 级联验证编排器
-│   └── provenance_tracker.py                # 来源链/验证链追踪器
-├── configs/
-│   ├── default.yaml                         # 默认配置
-│   └── orbit_vehicle_tree_sample.yaml       # [NEW] 示例功能树
-├── data/
-│   └── 数据处理测试.xlsx                     # 测试数据
-├── diagrams/                                # [NEW] 架构图
-│   └── architecture.png
-├── output/                                  # 输出结果
+│   ├── config_loader.py                     # 配置加载器（含 vlm 命名空间）
+│   ├── contracts.py                         # [NEW] VLM 数据契约
+│   ├── llm_client.py                        # LLM 客户端
+│   ├── seed_engine.py                       # ORBIT 种子引擎
+│   ├── generalization_engine.py             # ORBIT 泛化引擎
+│   ├── rule_verifier.py                     # ORBIT 规则验证器
+│   ├── semantic_verifier.py                 # ORBIT 语义验证器
+│   ├── safety_verifier.py                   # ORBIT 安全验证器
+│   ├── cascade_orchestrator.py              # ORBIT 级联编排器
+│   ├── provenance_tracker.py                # ORBIT 来源追踪器
+│   ├── image_client.py                      # [NEW] 图像生成客户端
+│   ├── vlm_client.py                        # [NEW] VLM 客户端
+│   ├── client_factory.py                    # [NEW] 客户端工厂
+│   ├── visual_seed_engine.py                # [NEW] 视觉种子引擎
+│   ├── visual_generalization_engine.py      # [NEW] 视觉泛化引擎
+│   ├── image_synthesis_coordinator.py       # [NEW] 图像合成协调器
+│   ├── schema_verifier.py                   # [NEW] 结构校验器
+│   ├── consistency_verifier.py              # [NEW] 文本自洽校验器
+│   ├── vision_consistency_verifier.py       # [NEW] 视觉一致性校验器
+│   └── vlm_pipeline_runner.py               # [NEW] VLM 管线编排器
 ├── scripts/
-│   ├── cli.py                               # 主 CLI 入口（5 种模式）
-│   ├── orbit_dataset_adapter.py             # [NEW] ORBIT 输出格式转换
+│   ├── cli.py                               # 主 CLI 入口（ORBIT + VLM 子命令）
+│   ├── orbit_dataset_adapter.py             # ORBIT 输出格式转换
+│   ├── vlm_dataset_adapter.py               # [NEW] VLM 双轨导出适配器
 │   ├── batch_synthesize.py                  # 并行批处理
-│   ├── dataset_adapter.py                   # 数据集适配器
-│   └── evolve_cockpit_skill.py              # 技能进化
-├── skills/
-│   ├── car-orbit-synthesis/                 # [NEW] ORBIT 流水线技能
-│   │   └── SKILL.md
-│   ├── cockpit-utterance-synthesis/
-│   │   └── SKILL.md
-│   ├── cockpit-utterance-validation/
-│   │   └── SKILL.md
-│   └── cockpit-delegation-orchestrator/
-│       └── SKILL.md
-├── tools/
-│   ├── orbit_seed_tool.py                   # [NEW] ORBIT 种子工具
-│   ├── orbit_generalize_tool.py             # [NEW] ORBIT 泛化工具
-│   ├── orbit_verify_tool.py                 # [NEW] ORBIT 验证工具
-│   ├── orbit_toolset_adapter.py             # [NEW] ORBIT 工具集注册
-│   ├── cockpit_synthesis_tool.py            # 核心合成工具
-│   ├── delegate_synthesis.py                # 委托合成工具
-│   └── toolset_adapter.py                   # 工具集适配器
-├── tests/
-│   ├── test_orbit_core.py                   # [NEW] ORBIT 纯逻辑测试（30 个）
-│   ├── test_orbit_llm_mock.py               # [NEW] ORBIT Mock 测试（46 个）
-│   └── test_tools.py                        # 现有工具测试
-├── docs/
-│   └── orbit-integration-analysis.md        # ORBIT 集成分析
-├── PRODUCT_SPEC.md                          # [NEW] 产品规格说明
-├── ARCHITECTURE.md                          # [NEW] 架构设计文档
-├── INTERFACE_DESIGN.md                      # [NEW] 接口设计文档
-├── TESTING.md                               # [NEW] 测试文档
-├── REQUIREMENTS_REFLECTION.md               # [NEW] 需求反思文档
-├── CLAUDE.md                                # [NEW] AI 架构指南
-├── pyproject.toml
-├── .gitignore
+│   └── dataset_adapter.py                   # 数据集适配器
+├── configs/
+│   ├── default.yaml                         # 全局默认配置
+│   ├── orbit_vehicle_tree_sample.yaml       # ORBIT 示例功能树
+│   └── vlm_task_sample.yaml                 # [NEW] VLM 任务配置示例
+├── tests/                                   # 217 个测试，core/ 覆盖率 96%
+│   ├── test_orbit_core.py                   # ORBIT 纯逻辑测试（30 个）
+│   ├── test_orbit_llm_mock.py               # ORBIT Mock 测试（46 个）
+│   ├── test_tools.py                        # ORBIT 工具测试（30 个）
+│   ├── test_vlm_core.py                     # [NEW] VLM 纯逻辑测试（44 个）
+│   ├── test_vlm_llm_mock.py                 # [NEW] VLM Mock 测试（36 个）
+│   └── test_vlm_coverage_boost.py           # [NEW] VLM 覆盖率补充（31 个）
+├── tools/                                   # Hermes 工具层
+├── skills/                                  # Hermes 技能定义
+├── diagrams/                                # 架构图
+├── docs/                                    # 补充文档
+├── ARCHITECTURE.md                          # 架构设计文档
+├── INTERFACE_DESIGN.md                      # 接口设计文档
+├── TESTING.md                               # 全量测试文档
+├── REQUIREMENTS_REFLECTION.md               # 需求反思文档
+├── CLAUDE.md                                # AI 架构指南
+├── PROJECT_STATUS.md                        # 项目状态总览
 └── README.md
 ```
 
-## 测试
-
-```bash
-# 运行所有 ORBIT 测试（76 个测试，94% 覆盖率）
-python3 -m pytest tests/test_orbit_core.py tests/test_orbit_llm_mock.py -v
-
-# 覆盖率报告
-python3 -m pytest tests/test_orbit_core.py tests/test_orbit_llm_mock.py --cov=core --cov-report=term-missing
-
-# 运行所有非集成测试（不需要 API key）
-python -m pytest tests/ -v -m "not integration"
-
-# 运行全部测试（需要 OPENAI_API_KEY）
-python -m pytest tests/ -v
-```
+---
 
 ## 版本历史
 
 ### v0.3.0 (当前)
-- **Car-ORBIT-Agent**：借鉴 ORBIT 框架，实现系统化种子→多维度泛化→级联验证流水线
-- **核心引擎层**：新增 `core/` 目录，包含 10 个独立模块
-- **种子引擎**：从 YAML/Excel 功能树系统化生成功能种子
-- **多维度泛化**：沿口语化、句式变换、参数变化、简化省略、驾驶场景 5 个维度生成变体
-- **级联验证**：规则验证→语义验证→安全验证三层流水线，采用短路策略
-- **来源链追踪**：完整的来源链和验证链记录，支持 JSONL 轨迹文件
-- **ORBIT CLI 命令**：新增 `orbit` 子命令
-- **ORBIT 工具集**：3 个 Hermes 工具 + 工具集适配器
-- **ORBIT 技能**：`car-orbit-synthesis` SKILL.md
-- **76 个测试**：核心模块覆盖率 94%
-- **完整文档**：PRODUCT_SPEC、ARCHITECTURE、INTERFACE_DESIGN、TESTING、CLAUDE.md
+
+**VLM 视觉链路：**
+- 新增 11 个 VLM 核心模块（contracts、image_client、vlm_client、client_factory、visual_seed_engine、visual_generalization_engine、image_synthesis_coordinator、schema_verifier、consistency_verifier、vision_consistency_verifier、vlm_pipeline_runner）
+- 新增 VLM 双轨导出适配器（训练 JSONL + 审阅 Excel）
+- 新增 VLM CLI 子命令
+- 新增 VLM 任务配置示例
+- 新增 111 个 VLM 测试（纯逻辑 44 + Mock 36 + 覆盖率补充 31）
+- 核心模块覆盖率从 94% 提升至 96%（总计 217 个测试）
+- 全部文档更新为 ORBIT + VLM 双轨版本
+
+**Car-ORBIT-Agent（延续 v0.2.0）：**
+- 借鉴 ORBIT 框架，实现系统化种子→多维度泛化→级联验证流水线
+- 核心引擎层 10 个独立模块
+- 3 个 Hermes 工具 + 工具集适配器
+- car-orbit-synthesis SKILL.md
+- 76 个 ORBIT 测试
 
 ### v0.2.0
-- **并行批处理**：集成 hermes-agent `BatchRunner`，支持多线程并行处理 + 增量断点续传
-- **Agent 级验证闭环**：集成 hermes-agent `delegate_task`，通过子代理委托实现 generate → validate → retry 循环
-- **数据集适配器**：Excel → JSONL 转换，兼容 batch_runner 输入格式
-- **委托编排技能**：新增 `cockpit-delegation-orchestrator` SKILL.md
-- **委托合成工具**：新增 `cockpit_delegate_synthesize` 工具
-- **工具集适配器**：新增 `toolset_adapter.py`，自动注册到 hermes-agent 工具集
-- **26 项单元测试**：覆盖所有新模块
+- 并行批处理（hermes-agent BatchRunner）
+- Agent 级验证闭环（delegate_task）
+- 数据集适配器、委托编排技能
 
 ### v0.1.0
 - 基础技能系统（synthesis + validation SKILL.md）
 - 工具注册（ToolRegistry 模式）
 - Standalone / Agent 双模式
 - 自我进化集成（GEPA）
+
+---
 
 ## 致谢
 

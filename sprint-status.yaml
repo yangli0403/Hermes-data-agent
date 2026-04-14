@@ -1,7 +1,7 @@
 project: VLM-data-agent
 base_repo: Hermes-data-agent
-current_phase: 6
-current_phase_title: 代码质量与覆盖率审查
+current_phase: 7
+current_phase_title: 文档与交付
 status: completed
 last_updated: 2026-04-14
 completed_items:
@@ -9,15 +9,17 @@ completed_items:
   - "Phase 3: 接口与数据结构定义 — 全部代码框架和接口文档已完成"
   - "Phase 4: TDD 实现 — 186 测试全部通过（VLM 80 + ORBIT 106）"
   - "Phase 5: 需求反思 — REQUIREMENTS_REFLECTION.md 双轨版本已生成"
-  - "Phase 6: 代码质量审查 — 217 测试通过，core/ 覆盖率 96%，TESTING.md 已更新"
+  - "Phase 6: 代码质量审查 — 217 测试通过，core/ 覆盖率 96%"
+  - "Phase 6b: AI 架构指南 — CLAUDE.md 双轨版本已更新"
+  - "Phase 7: 文档交付 — README.md、CHANGELOG.md、pyproject.toml 已更新"
 artifacts:
+  - README.md
+  - CHANGELOG.md
   - TESTING.md
-  - tests/test_vlm_coverage_boost.py
-  - REQUIREMENTS_REFLECTION.md
-  - INTERFACE_DESIGN.md
+  - CLAUDE.md
   - ARCHITECTURE.md
-next_phase: 6b
-next_phase_title: 更新 AI 架构指南 (CLAUDE.md)
-next_focus:
-  - 更新 CLAUDE.md 为双轨版本
-  - 更新目录结构、命名约定、测试规范
+  - INTERFACE_DESIGN.md
+  - REQUIREMENTS_REFLECTION.md
+  - pyproject.toml
+next_phase: done
+next_phase_title: 全部阶段已完成
