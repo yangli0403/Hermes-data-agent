@@ -1,0 +1,122 @@
+# 车载 ORBIT Agent — 示例功能树配置
+#
+# 本文件定义了车辆功能树和参数库，作为种子生成的输入。
+# 种子引擎会根据功能和参数的组合，系统化地生成功能种子。
+
+vehicle_tree:
+  domains:
+    - name: 音乐
+      functions:
+        - name: 播放音乐
+          sub_functions:
+            - name: 按歌手名播放
+              utterance_template: "播放{歌手名}的音乐"
+              params:
+                歌手名:
+                  - 周杰伦
+                  - 蔡依林
+                  - 林俊杰
+                  - 陈奕迅
+            - name: 按歌曲名播放
+              utterance_template: "播放{歌曲名}"
+              params:
+                歌曲名:
+                  - 稻香
+                  - 说好不哭
+                  - 晴天
+            - name: 按歌单播放
+              utterance_template: "播放{歌单名}歌单"
+              params:
+                歌单名:
+                  - 我的收藏
+                  - 每日推荐
+                  - 驾车歌单
+        - name: 暂停音乐
+          sub_functions:
+            - name: 暂停当前播放
+              utterance_template: "暂停音乐"
+              params: {}
+        - name: 切歌
+          sub_functions:
+            - name: 下一首
+              utterance_template: "下一首"
+              params: {}
+            - name: 上一首
+              utterance_template: "上一首"
+              params: {}
+
+    - name: 导航
+      functions:
+        - name: 导航到目的地
+          sub_functions:
+            - name: 按地名导航
+              utterance_template: "导航到{目的地}"
+              params:
+                目的地:
+                  - 公司
+                  - 家
+                  - 机场
+                  - 火车站
+            - name: 按 POI 类型导航
+              utterance_template: "导航到最近的{POI类型}"
+              params:
+                POI类型:
+                  - 加油站
+                  - 充电桩
+                  - 停车场
+                  - 餐厅
+        - name: 查看路况
+          sub_functions:
+            - name: 当前路况
+              utterance_template: "查看当前路况"
+              params: {}
+
+    - name: 空调
+      functions:
+        - name: 调节温度
+          sub_functions:
+            - name: 设定温度
+              utterance_template: "把空调调到{温度}度"
+              params:
+                温度:
+                  - "22"
+                  - "24"
+                  - "26"
+            - name: 升高温度
+              utterance_template: "空调温度调高{幅度}度"
+              params:
+                幅度:
+                  - "1"
+                  - "2"
+                  - "3"
+        - name: 开关空调
+          sub_functions:
+            - name: 打开空调
+              utterance_template: "打开空调"
+              params: {}
+            - name: 关闭空调
+              utterance_template: "关闭空调"
+              params: {}
+
+    - name: 车窗
+      functions:
+        - name: 控制车窗
+          sub_functions:
+            - name: 打开车窗
+              utterance_template: "打开{位置}车窗"
+              params:
+                位置:
+                  - 主驾
+                  - 副驾
+                  - 左后
+                  - 右后
+                  - 全部
+            - name: 关闭车窗
+              utterance_template: "关闭{位置}车窗"
+              params:
+                位置:
+                  - 主驾
+                  - 副驾
+                  - 左后
+                  - 右后
+                  - 全部
