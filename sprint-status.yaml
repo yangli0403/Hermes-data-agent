@@ -1,33 +1,22 @@
 project: VLM-data-agent
 base_repo: Hermes-data-agent
-current_phase: 3
-current_phase_title: 接口与数据结构定义
+current_phase: 5
+current_phase_title: 需求反思
 status: completed
 last_updated: 2026-04-14
 completed_items:
-  - "Phase 2: 架构与设计 — ARCHITECTURE.md、架构图已完成并提交"
+  - "Phase 2: 架构与设计 — ARCHITECTURE.md、架构图已完成"
   - "Phase 3: 接口与数据结构定义 — 全部代码框架和接口文档已完成"
-  - "core/contracts.py — VLM 核心数据契约（VisualSeed、VLMSample、VLMRecord、枚举类型）"
-  - "core/image_client.py — 图像生成客户端（ImageClient、ImageResult）"
-  - "core/vlm_client.py — 视觉语言模型客户端（VLMClient、VLMJudgment）"
-  - "core/client_factory.py — 统一客户端工厂（ClientFactory）"
-  - "core/visual_seed_engine.py — 视觉种子引擎（VisualSeedEngine）"
-  - "core/visual_generalization_engine.py — 视觉泛化引擎（VisualGeneralizationEngine）"
-  - "core/image_synthesis_coordinator.py — 图像合成协调器（ImageSynthesisCoordinator）"
-  - "core/schema_verifier.py — 结构校验器（SchemaVerifier）"
-  - "core/consistency_verifier.py — 文本自洽校验器（ConsistencyVerifier）"
-  - "core/vision_consistency_verifier.py — 图像内容一致性校验器（VisionConsistencyVerifier）"
-  - "core/vlm_pipeline_runner.py — VLM 管线编排器（VLMPipelineRunner）"
-  - "scripts/vlm_dataset_adapter.py — VLM 双轨导出适配器（VLMDatasetAdapter）"
-  - "configs/vlm_task_sample.yaml — VLM 任务配置示例"
-  - "core/config_loader.py — 添加 vlm 配置命名空间和 get_vlm_config()"
-  - "core/__init__.py — 导出 VLM 新增模块的所有公共类"
-  - "scripts/cli.py — 添加 vlm 子命令，版本升至 0.3.0"
-  - "INTERFACE_DESIGN.md — 追加 VLM 视觉链路接口设计文档"
-  - "所有模块语法验证和基础功能测试通过"
-  - "CLI vlm --help 验证通过"
+  - "Phase 4: TDD 实现 — 186 测试全部通过（VLM 80 + ORBIT 106）"
+  - "Phase 5: 需求反思 — REQUIREMENTS_REFLECTION.md 双轨版本已生成"
+  - "VLM 用户故事覆盖: 6/7 (US-06 部分完成，P1 工具层待办)"
+  - "VLM 用户测试用例覆盖: 6/6 (100%)"
+  - "ORBIT 功能覆盖率: 97%"
+  - "全仓库测试: 186 passed, 0 failed, 0 regressions"
 artifacts:
+  - REQUIREMENTS_REFLECTION.md
   - INTERFACE_DESIGN.md
+  - ARCHITECTURE.md
   - core/contracts.py
   - core/image_client.py
   - core/vlm_client.py
@@ -41,13 +30,16 @@ artifacts:
   - core/vlm_pipeline_runner.py
   - scripts/vlm_dataset_adapter.py
   - configs/vlm_task_sample.yaml
-next_phase: 4
-next_phase_title: 子代理驱动实现 (TDD)
+  - tests/test_vlm_core.py
+  - tests/test_vlm_llm_mock.py
+identified_deviations:
+  - "偏差1: tools/vlm_* 工具层未实现 (P1, 不阻塞主链路)"
+  - "偏差2: skills/vlm-data-synthesis/SKILL.md 未创建 (P1)"
+  - "偏差3: VLMPipelineRunner 替代 CascadeOrchestrator 扩展 (等价替代)"
+  - "偏差4: 项目文档未同步更新 (将在 Phase 6b/7 解决)"
+next_phase: 6
+next_phase_title: 代码质量与覆盖率审查
 next_focus:
-  - 为每个 VLM 模块编写单元测试
-  - 实现 VisualSeedEngine 的完整配置解析逻辑
-  - 实现 VisualGeneralizationEngine 的 LLM 调用和 JSON 解析
-  - 实现 ImageSynthesisCoordinator 的图像生成调用
-  - 实现三层验证器的完整验证逻辑
-  - 实现 VLMPipelineRunner 的端到端管线
-  - 实现 VLMDatasetAdapter 的双轨导出
+  - 运行覆盖率报告
+  - 补充边界条件测试
+  - 代码质量审查
