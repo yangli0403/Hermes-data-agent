@@ -1,68 +1,70 @@
 graph TD
-    subgraph CLI["CLI 入口层"]
-        CLI_ORBIT["cli.py — orbit 子命令"]
+    subgraph L1[入口与交互层]
+        CLI[scripts/cli.py\norbit / vlm 子命令]
+        SKILL[skills/*\ncar-orbit-synthesis / vlm-data-synthesis]
+        TOOL[tools/*\norbit_* / vlm_* / toolset adapter]
     end
 
-    subgraph SKILL["技能层"]
-        SKILL_ORCH["car-orbit-synthesis<br/>SKILL.md<br/>(编排技能)"]
+    subgraph L2[编排与流程层]
+        RUNNER[VLM Pipeline Runner\n单图最小闭环编排]
+        CASCADE[CascadeOrchestrator\n按模式装配验证阶段]
+        CONFIG[ConfigLoader\ndefault.yaml + vlm 配置]
     end
 
-    subgraph TOOLS["工具层"]
-        SEED["orbit_seed_tool<br/>种子生成"]
-        GEN["orbit_generalize_tool<br/>多维度泛化"]
-        VERIFY["orbit_verify_tool<br/>级联验证"]
+    subgraph L3[核心生成层]
+        SEED[Visual Seed Engine\n任务配置 → VisualSeed]
+        GEN[Visual Generalization Engine\nquestion / answer / prompt / statement]
+        IMG[Image Synthesis Coordinator\nprompt → image artifact]
     end
 
-    subgraph CORE["核心引擎层"]
-        SEED_ENG["SeedEngine<br/>功能树解析 / Excel 提取<br/>组合策略"]
-        GEN_ENG["GeneralizationEngine<br/>Prompt 构建 / LLM 调用<br/>维度管理"]
-        RULE_V["RuleVerifier<br/>参数完整性 / 长度约束<br/>车辆约束规则"]
-        SEM_V["SemanticVerifier<br/>语义一致性 / 自然度<br/>LLM 评判"]
-        SAFE_V["SafetyVerifier<br/>驾驶安全 / 法规合规<br/>LLM 评判"]
-        CASCADE["CascadeOrchestrator<br/>级联编排 / 置信度汇总"]
+    subgraph L4[验证与追踪层]
+        STRUCT[SchemaVerifier\n结构与字段完整性]
+        CONSIST[ConsistencyVerifier\nQA / prompt 自洽]
+        VISION[VisionConsistencyVerifier\n图像内容一致性]
+        TRACE[ProvenanceTracker\n来源链 / 验证链 / 审阅轨迹]
     end
 
-    subgraph INFRA["基础设施层"]
-        LLM["LLMClient<br/>OpenAI 兼容 API<br/>重试 / 回退"]
-        PROV["ProvenanceTracker<br/>来源链 / 验证链<br/>JSONL 轨迹"]
-        CFG["ConfigLoader<br/>YAML 配置<br/>default.yaml"]
+    subgraph L5[模型客户端与提供方适配层]
+        FACTORY[Model Client Factory]
+        LLM[LLMClient\n文本生成/判定]
+        IMGC[ImageClient\n图像生成]
+        VLMC[VLMClient\n图像理解/视觉校验]
     end
 
-    subgraph ADAPTER["适配器层"]
-        TS_ADAPT["toolset_adapter<br/>car-orbit 工具集注册"]
-        DS_ADAPT["orbit_dataset_adapter<br/>输出格式转换"]
+    subgraph L6[输出与测试层]
+        EXPORT[VLM Dataset Adapter\n训练导出 + 审阅导出]
+        OUT[(output/vlm)]
+        TEST[tests/*\ncontract / mock / smoke]
     end
 
-    subgraph OUTPUT["输出"]
-        JSON_OUT["JSON / JSONL"]
-        EXCEL_OUT["Excel"]
-        STATS["统计摘要"]
-    end
-
-    CLI_ORBIT --> SKILL_ORCH
-    SKILL_ORCH --> SEED
-    SKILL_ORCH --> GEN
-    SKILL_ORCH --> VERIFY
-
-    SEED --> SEED_ENG
-    GEN --> GEN_ENG
-    VERIFY --> CASCADE
-
-    CASCADE --> RULE_V
-    CASCADE --> SEM_V
-    CASCADE --> SAFE_V
-
-    SEED_ENG --> CFG
-    GEN_ENG --> LLM
-    SEM_V --> LLM
-    SAFE_V --> LLM
-
-    CASCADE --> PROV
-    GEN_ENG --> PROV
-
-    DS_ADAPT --> JSON_OUT
-    DS_ADAPT --> EXCEL_OUT
-    DS_ADAPT --> STATS
-
-    PROV --> DS_ADAPT
-    TS_ADAPT -.->|注册| TOOLS
+    CLI --> RUNNER
+    SKILL --> TOOL
+    TOOL --> RUNNER
+    CONFIG --> RUNNER
+    RUNNER --> SEED
+    SEED --> GEN
+    GEN --> IMG
+    GEN --> CASCADE
+    IMG --> CASCADE
+    CASCADE --> STRUCT
+    CASCADE --> CONSIST
+    CASCADE --> VISION
+    STRUCT --> TRACE
+    CONSIST --> TRACE
+    VISION --> TRACE
+    SEED --> TRACE
+    GEN --> TRACE
+    IMG --> TRACE
+    RUNNER --> EXPORT
+    TRACE --> EXPORT
+    EXPORT --> OUT
+    TEST --> SEED
+    TEST --> CASCADE
+    TEST --> EXPORT
+    FACTORY --> LLM
+    FACTORY --> IMGC
+    FACTORY --> VLMC
+    GEN --> LLM
+    IMG --> IMGC
+    CONSIST --> LLM
+    VISION --> VLMC

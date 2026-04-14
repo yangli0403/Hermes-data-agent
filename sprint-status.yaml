@@ -1,0 +1,27 @@
+project: VLM-data-agent
+base_repo: Hermes-data-agent
+current_phase: 2
+current_phase_title: 架构与设计
+status: awaiting_user_checkpoint
+last_updated: 2026-04-14
+completed_items:
+  - 读取并遵循 system-dev 第2阶段架构设计指引
+  - 回读已确认的 REPO_ANALYSIS.md 与现有仓库架构文档
+  - 生成新的 diagrams/architecture.mmd 与 diagrams/architecture.png
+  - 生成面向 VLM-data-agent 的 ARCHITECTURE.md
+artifacts:
+  - /home/ubuntu/hermes_data_agent_repo_20260414/ARCHITECTURE.md
+  - /home/ubuntu/hermes_data_agent_repo_20260414/diagrams/architecture.mmd
+  - /home/ubuntu/hermes_data_agent_repo_20260414/diagrams/architecture.png
+pending_user_confirmation:
+  - 是否接受 VLMSample / VLMRecord / BaseRecord 的分层关系
+  - 是否接受 LLMClient、ImageClient、VLMClient 三类客户端拆分方案
+  - 是否接受 CascadeOrchestrator 的模式化扩展方案
+  - 是否接受训练导出与审阅导出的双轨结构
+next_phase_if_approved: 3
+next_phase_title_if_approved: 接口与数据结构定义
+next_focus:
+  - contracts.py 的对象字段定义
+  - 三类客户端的统一调用签名与异常结构
+  - CLI 的 vlm 子命令参数设计
+  - 导出对象与目录结构契约
