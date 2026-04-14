@@ -77,9 +77,8 @@ class VisualSeedEngine:
 
         tasks = config.get("vlm_tasks", [])
         if not tasks:
-            raise ValueError(
-                f"配置文件中未找到 'vlm_tasks' 字段: {config_path}"
-            )
+            logger.warning("配置文件中 'vlm_tasks' 为空: %s", config_path)
+            return []
 
         seeds: List[VisualSeed] = []
         for task_config in tasks:
@@ -151,3 +150,35 @@ class VisualSeedEngine:
                 seeds.append(seed)
 
         return seeds
+
+    def generate_single(
+        self,
+        task_category: str,
+        scene: Dict[str, Any],
+        question_type: str,
+        answer_style: str = "brief",
+        constraints: Optional[Dict] = None,
+    ) -> VisualSeed:
+        """
+        生成单个视觉种子。
+
+        参数:
+            task_category: 任务类别
+            scene: 场景字典，包含 description、entities、image_style
+            question_type: 问题类型
+            answer_style: 回答风格
+            constraints: 约束条件
+
+        返回:
+            VisualSeed 实例
+        """
+        return VisualSeed(
+            task_category=task_category,
+            scene_description=scene.get("description", ""),
+            entities=scene.get("entities", []),
+            question_type=question_type,
+            answer_style=answer_style,
+            image_style=scene.get("image_style", "photorealistic"),
+            constraints=constraints or {},
+            metadata={"source": "manual"},
+        )

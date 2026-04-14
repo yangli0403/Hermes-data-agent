@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import List
 
@@ -92,7 +93,18 @@ class SchemaVerifier:
                     f"{field_name} 长度不足（最小 {min_len} 字符，实际 {len(value.strip())}）"
                 )
 
-        # 4. 检查文本长度上限
+        # 4. 检查 question 以问号结尾
+        if sample.question and sample.question.strip():
+            q = sample.question.strip()
+            if not q.endswith("?") and not q.endswith("？"):
+                errors.append("question 应以问号结尾（? 或 ？）")
+
+        # 5. 检查 image_prompt 为英文（不包含中文字符）
+        if sample.image_prompt and sample.image_prompt.strip():
+            if re.search(r'[\u4e00-\u9fff]', sample.image_prompt):
+                errors.append("image_prompt 应为英文，不应包含中文字符")
+
+        # 6. 检查文本长度上限
         if sample.question and len(sample.question) > self.MAX_QUESTION_LENGTH:
             errors.append(
                 f"question 超过最大长度 {self.MAX_QUESTION_LENGTH}（实际 {len(sample.question)}）"
