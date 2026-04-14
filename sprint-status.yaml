@@ -1,7 +1,7 @@
 project: VLM-data-agent
 base_repo: Hermes-data-agent
-current_phase: 5
-current_phase_title: 需求反思
+current_phase: 6
+current_phase_title: 代码质量与覆盖率审查
 status: completed
 last_updated: 2026-04-14
 completed_items:
@@ -9,37 +9,15 @@ completed_items:
   - "Phase 3: 接口与数据结构定义 — 全部代码框架和接口文档已完成"
   - "Phase 4: TDD 实现 — 186 测试全部通过（VLM 80 + ORBIT 106）"
   - "Phase 5: 需求反思 — REQUIREMENTS_REFLECTION.md 双轨版本已生成"
-  - "VLM 用户故事覆盖: 6/7 (US-06 部分完成，P1 工具层待办)"
-  - "VLM 用户测试用例覆盖: 6/6 (100%)"
-  - "ORBIT 功能覆盖率: 97%"
-  - "全仓库测试: 186 passed, 0 failed, 0 regressions"
+  - "Phase 6: 代码质量审查 — 217 测试通过，core/ 覆盖率 96%，TESTING.md 已更新"
 artifacts:
+  - TESTING.md
+  - tests/test_vlm_coverage_boost.py
   - REQUIREMENTS_REFLECTION.md
   - INTERFACE_DESIGN.md
   - ARCHITECTURE.md
-  - core/contracts.py
-  - core/image_client.py
-  - core/vlm_client.py
-  - core/client_factory.py
-  - core/visual_seed_engine.py
-  - core/visual_generalization_engine.py
-  - core/image_synthesis_coordinator.py
-  - core/schema_verifier.py
-  - core/consistency_verifier.py
-  - core/vision_consistency_verifier.py
-  - core/vlm_pipeline_runner.py
-  - scripts/vlm_dataset_adapter.py
-  - configs/vlm_task_sample.yaml
-  - tests/test_vlm_core.py
-  - tests/test_vlm_llm_mock.py
-identified_deviations:
-  - "偏差1: tools/vlm_* 工具层未实现 (P1, 不阻塞主链路)"
-  - "偏差2: skills/vlm-data-synthesis/SKILL.md 未创建 (P1)"
-  - "偏差3: VLMPipelineRunner 替代 CascadeOrchestrator 扩展 (等价替代)"
-  - "偏差4: 项目文档未同步更新 (将在 Phase 6b/7 解决)"
-next_phase: 6
-next_phase_title: 代码质量与覆盖率审查
+next_phase: 6b
+next_phase_title: 更新 AI 架构指南 (CLAUDE.md)
 next_focus:
-  - 运行覆盖率报告
-  - 补充边界条件测试
-  - 代码质量审查
+  - 更新 CLAUDE.md 为双轨版本
+  - 更新目录结构、命名约定、测试规范
