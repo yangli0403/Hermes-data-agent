@@ -1,0 +1,72 @@
+# VLM 视觉任务配置示例
+#
+# 本文件定义视觉问答任务的场景、实体、问题类型和约束条件。
+# 视觉种子引擎会根据配置组合生成 VisualSeed 对象。
+
+vlm_tasks:
+  - category: scene_understanding
+    scenes:
+      - description: "城市十字路口，有行人、汽车和红绿灯"
+        entities:
+          - 行人
+          - 汽车
+          - 红绿灯
+          - 斑马线
+        image_style: photorealistic
+      - description: "超市货架，摆放着各种商品"
+        entities:
+          - 货架
+          - 商品
+          - 价格标签
+        image_style: photorealistic
+    question_types:
+      - descriptive
+      - counting
+      - spatial
+    answer_style: brief
+    constraints:
+      min_entities: 2
+      language: zh
+
+  - category: object_recognition
+    scenes:
+      - description: "办公桌上摆放着电脑、文件和咖啡杯"
+        entities:
+          - 电脑
+          - 文件
+          - 咖啡杯
+          - 键盘
+        image_style: photorealistic
+      - description: "厨房台面上有水果和厨具"
+        entities:
+          - 水果
+          - 刀具
+          - 砧板
+          - 碗
+        image_style: photorealistic
+    question_types:
+      - identification
+      - counting
+      - yes_no
+    answer_style: brief
+    constraints:
+      min_entities: 2
+      language: zh
+
+  - category: spatial_reasoning
+    scenes:
+      - description: "客厅场景，沙发前有茶几，茶几上有遥控器"
+        entities:
+          - 沙发
+          - 茶几
+          - 遥控器
+          - 电视
+        image_style: photorealistic
+    question_types:
+      - spatial
+      - reasoning
+      - comparative
+    answer_style: detailed
+    constraints:
+      require_spatial_relations: true
+      language: zh

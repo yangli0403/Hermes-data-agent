@@ -48,7 +48,36 @@ _DEFAULTS: Dict[str, Any] = {
             "max_retries": 3,
             "retry_delay": 1.0,
         },
-    }
+    },
+    "vlm": {
+        "model": {
+            "generation": "gpt-4.1-mini",
+            "image_generation": "dall-e-3",
+            "vision_verification": "gpt-4.1-mini",
+            "consistency_verification": "gpt-4.1-mini",
+        },
+        "image": {
+            "default_size": "1024x1024",
+            "default_quality": "standard",
+        },
+        "verification": {
+            "schema_enabled": True,
+            "consistency_threshold": 0.7,
+            "vision_threshold": 0.7,
+            "qa_weight": 0.6,
+            "statement_weight": 0.4,
+        },
+        "pipeline": {
+            "samples_per_seed": 1,
+            "max_seeds": 100,
+            "batch_size": 5,
+        },
+        "processing": {
+            "max_retries": 3,
+            "retry_delay": 2.0,
+            "timeout": 120.0,
+        },
+    },
 }
 
 
@@ -140,6 +169,10 @@ class ConfigLoader:
     def get_orbit_config(self) -> Dict[str, Any]:
         """获取 orbit 配置段的完整内容。"""
         return copy.deepcopy(self._config.get("orbit", {}))
+
+    def get_vlm_config(self) -> Dict[str, Any]:
+        """获取 vlm 配置段的完整内容。"""
+        return copy.deepcopy(self._config.get("vlm", {}))
 
     def override(self, key_path: str, value: Any) -> None:
         """

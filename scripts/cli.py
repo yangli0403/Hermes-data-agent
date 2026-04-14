@@ -87,7 +87,7 @@ def setup_logging(verbose: bool = False):
 # =====================================================================
 
 @click.group()
-@click.version_option(version="0.2.0")
+@click.version_option(version="0.3.0")
 def main():
     """Hermes Data Agent — Cockpit AI utterance synthesis powered by Hermes Agent."""
     pass
@@ -546,6 +546,211 @@ def orbit(config_path, input_path, output_dir, variants, limit, model,
 
 
 # =====================================================================
+# Command: vlm (NEW — VLM visual data pipeline)
+# =====================================================================
+
+@main.command()
+@click.option("--config", "-c", "config_path", required=True,
+              help="VLM 视觉任务配置文件 (YAML)")
+@click.option("--output-dir", "-o", default="output/vlm",
+              help="输出目录")
+@click.option("--samples", "-n", default=1, type=int,
+              help="每个种子生成的样本数")
+@click.option("--max-seeds", default=100, type=int,
+              help="最大种子数量")
+@click.option("--model", "-m", default="gpt-4.1-mini",
+              help="文本生成模型")
+@click.option("--image-model", default="dall-e-3",
+              help="图像生成模型")
+@click.option("--skip-image", is_flag=True,
+              help="跳过图像生成（仅生成文本部分）")
+@click.option("--skip-vision-verify", is_flag=True,
+              help="跳过视觉一致性校验")
+@click.option("--threshold", "-t", default=0.7, type=float,
+              help="验证通过阈值")
+@click.option("--verbose", "-v", is_flag=True, help="详细日志")
+def vlm(config_path, output_dir, samples, max_seeds, model, image_model,
+        skip_image, skip_vision_verify, threshold, verbose):
+    """VLM 视觉数据管线：种子 → 泛化 → 图像生成 → 三层验证 → 导出。"""
+    setup_logging(verbose)
+
+    from core.config_loader import ConfigLoader
+    from core.visual_seed_engine import VisualSeedEngine
+    from core.visual_generalization_engine import VisualGeneralizationEngine
+    from core.image_synthesis_coordinator import ImageSynthesisCoordinator
+    from core.schema_verifier import SchemaVerifier
+    from core.consistency_verifier import ConsistencyVerifier
+    from core.vision_consistency_verifier import VisionConsistencyVerifier
+    from core.vlm_pipeline_runner import VLMPipelineRunner
+    from core.llm_client import LLMClient
+    from core.image_client import ImageClient
+    from core.vlm_client import VLMClient as VLMClientCls
+    from core.provenance_tracker import ProvenanceTracker
+    from scripts.vlm_dataset_adapter import VLMDatasetAdapter
+
+    # ── 初始化 ────────────────────────────────────────────────────────
+    config_loader = ConfigLoader()
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    console.print(Panel.fit(
+        f"[bold cyan]VLM Data Pipeline[/bold cyan]\n"
+        f"Config: {config_path}\n"
+        f"Samples/Seed: {samples}\n"
+        f"Max Seeds: {max_seeds}\n"
+        f"Model: {model}\n"
+        f"Image Model: {image_model}\n"
+        f"Skip Image: {skip_image}\n"
+        f"Skip Vision Verify: {skip_vision_verify}\n"
+        f"Threshold: {threshold}\n"
+        f"Output: {output_dir}",
+        title="VLM Configuration",
+    ))
+
+    # ── 阶段1: 种子生成 ──────────────────────────────────────────────────
+    console.print("\n[bold]阶段 1: 视觉种子生成[/bold]")
+    seed_engine = VisualSeedEngine(config_loader=config_loader)
+    seeds = seed_engine.generate_from_config(config_path, max_seeds=max_seeds)
+    console.print(f"  生成 [green]{len(seeds)}[/green] 个视觉种子")
+
+    # ── 阶段2: 文本泛化 ──────────────────────────────────────────────────
+    console.print("\n[bold]阶段 2: 文本泛化生成[/bold]")
+    llm = LLMClient(model=model)
+    gen_engine = VisualGeneralizationEngine(llm_client=llm, model=model)
+
+    all_samples = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("泛化中...", total=len(seeds))
+        for seed in seeds:
+            try:
+                seed_samples = gen_engine.generate(seed, count=samples)
+                all_samples.extend(seed_samples)
+            except Exception as e:
+                logger.error("种子 %s 泛化失败: %s", seed.seed_id, e)
+            progress.advance(task)
+
+    console.print(f"  生成 [green]{len(all_samples)}[/green] 个候选样本")
+
+    # ── 阶段3: 图像合成 ──────────────────────────────────────────────────
+    if not skip_image:
+        console.print("\n[bold]阶段 3: 图像合成[/bold]")
+        img_client = ImageClient(model=image_model)
+        img_coordinator = ImageSynthesisCoordinator(image_client=img_client)
+        image_dir = str(output_path / "images")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("图像生成中...", total=len(all_samples))
+            for i, sample in enumerate(all_samples):
+                if sample.status != "failed" and not sample.has_image:
+                    img_coordinator.synthesize(sample, image_dir)
+                progress.advance(task)
+
+        img_ok = sum(1 for s in all_samples if s.status == "image_generated")
+        console.print(f"  图像生成成功: [green]{img_ok}[/green]/{len(all_samples)}")
+    else:
+        console.print("\n[bold]阶段 3: 图像合成 [yellow]已跳过[/yellow][/bold]")
+
+    # ── 阶段4: 三层验证 ──────────────────────────────────────────────────
+    console.print("\n[bold]阶段 4: 三层验证[/bold]")
+    schema_v = SchemaVerifier()
+    consistency_v = ConsistencyVerifier(llm_client=llm, model=model)
+    vision_v = None if skip_vision_verify else VisionConsistencyVerifier(
+        vlm_client=VLMClientCls(model=model),
+    )
+
+    verified_count = 0
+    rejected_count = 0
+    for sample in all_samples:
+        if sample.status == "failed":
+            rejected_count += 1
+            continue
+
+        # 4a. 结构校验
+        sr = schema_v.verify(sample)
+        sample.verification_results.append(sr.to_dict())
+        if not sr.passed:
+            sample.status = "rejected"
+            sample.failure_reason = sr.reason
+            rejected_count += 1
+            continue
+
+        # 4b. 文本自洽校验
+        cr = consistency_v.verify(sample, threshold)
+        sample.verification_results.append(cr.to_dict())
+        if not cr.passed:
+            sample.status = "rejected"
+            sample.failure_reason = cr.reason
+            rejected_count += 1
+            continue
+
+        # 4c. 视觉一致性校验
+        if vision_v and sample.has_image:
+            vr = vision_v.verify(sample, threshold)
+            sample.verification_results.append(vr.to_dict())
+            if not vr.passed:
+                sample.status = "rejected"
+                sample.failure_reason = vr.reason
+                rejected_count += 1
+                continue
+
+        sample.status = "verified"
+        verified_count += 1
+
+    console.print(f"  通过: [green]{verified_count}[/green], 拒绝: [red]{rejected_count}[/red]")
+
+    # ── 阶段5: 导出 ──────────────────────────────────────────────────────
+    console.print("\n[bold]阶段 5: 导出结果[/bold]")
+    from core.contracts import VLMRecord, VisualSeed as VSSeed
+
+    # 构建 VLMRecord
+    records = []
+    seed_map = {s.seed_id: s for s in seeds}
+    for sample in all_samples:
+        if sample.is_verified:
+            seed_obj = seed_map.get(sample.seed_id)
+            if seed_obj:
+                scores = [
+                    vr.get("score", 0.0)
+                    for vr in sample.verification_results
+                    if isinstance(vr, dict)
+                ]
+                confidence = sum(scores) / len(scores) if scores else 0.0
+                record = VLMRecord.from_sample(
+                    sample=sample,
+                    seed=seed_obj,
+                    run_id="vlm_cli",
+                    confidence_score=confidence,
+                )
+                records.append(record)
+
+    adapter = VLMDatasetAdapter()
+    summaries = adapter.export_all(records, str(output_path), run_id="vlm_cli")
+
+    # 结果表格
+    table = Table(title="VLM Pipeline Results")
+    table.add_column("指标", style="cyan")
+    table.add_column("值", style="green")
+    table.add_row("种子数", str(len(seeds)))
+    table.add_row("候选样本数", str(len(all_samples)))
+    table.add_row("验证通过", str(verified_count))
+    table.add_row("验证拒绝", str(rejected_count))
+    table.add_row("导出记录数", str(len(records)))
+    for name, summary in summaries.items():
+        table.add_row(f"{name} 输出", summary.output_path)
+    console.print(table)
+
+    console.print("\n[green bold]VLM 管线执行完成！[/green bold]")
+
+
+# =====================================================================
 # Command: info
 # =====================================================================
 
@@ -625,6 +830,11 @@ def info():
     tool_table.add_row("orbit_batch_generalize", "orbit", "Batch multi-dimension generalization [NEW]")
     tool_table.add_row("orbit_verify", "orbit", "Cascade verification (rule→semantic→safety) [NEW]")
     tool_table.add_row("orbit_batch_verify", "orbit", "Batch cascade verification [NEW]")
+    tool_table.add_row("vlm_seed_generate", "vlm-data", "VLM visual seed generation [NEW]")
+    tool_table.add_row("vlm_generalize", "vlm-data", "Visual QA text generalization [NEW]")
+    tool_table.add_row("vlm_synthesize_image", "vlm-data", "Image synthesis from prompt [NEW]")
+    tool_table.add_row("vlm_verify", "vlm-data", "Three-layer verification (schema→consistency→vision) [NEW]")
+    tool_table.add_row("vlm_export", "vlm-data", "Training + review dual-track export [NEW]")
     console.print(tool_table)
 
     # Modes
@@ -639,7 +849,9 @@ def info():
     mode_table.add_row("Batch", "batch -i ... -r run_name",
                        "BatchRunner parallel + checkpoint")
     mode_table.add_row("ORBIT", "orbit -c config.yaml",
-                       "Car-ORBIT-Agent pipeline: seed→generalize→verify [NEW]")
+                       "Car-ORBIT-Agent pipeline: seed\u2192generalize\u2192verify [NEW]")
+    mode_table.add_row("VLM", "vlm -c vlm_config.yaml",
+                       "VLM visual pipeline: seed\u2192generalize\u2192image\u2192verify\u2192export [NEW]")
     console.print(mode_table)
 
 

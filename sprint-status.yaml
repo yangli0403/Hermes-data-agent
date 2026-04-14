@@ -1,27 +1,53 @@
 project: VLM-data-agent
 base_repo: Hermes-data-agent
-current_phase: 2
-current_phase_title: 架构与设计
-status: awaiting_user_checkpoint
+current_phase: 3
+current_phase_title: 接口与数据结构定义
+status: completed
 last_updated: 2026-04-14
 completed_items:
-  - 读取并遵循 system-dev 第2阶段架构设计指引
-  - 回读已确认的 REPO_ANALYSIS.md 与现有仓库架构文档
-  - 生成新的 diagrams/architecture.mmd 与 diagrams/architecture.png
-  - 生成面向 VLM-data-agent 的 ARCHITECTURE.md
+  - "Phase 2: 架构与设计 — ARCHITECTURE.md、架构图已完成并提交"
+  - "Phase 3: 接口与数据结构定义 — 全部代码框架和接口文档已完成"
+  - "core/contracts.py — VLM 核心数据契约（VisualSeed、VLMSample、VLMRecord、枚举类型）"
+  - "core/image_client.py — 图像生成客户端（ImageClient、ImageResult）"
+  - "core/vlm_client.py — 视觉语言模型客户端（VLMClient、VLMJudgment）"
+  - "core/client_factory.py — 统一客户端工厂（ClientFactory）"
+  - "core/visual_seed_engine.py — 视觉种子引擎（VisualSeedEngine）"
+  - "core/visual_generalization_engine.py — 视觉泛化引擎（VisualGeneralizationEngine）"
+  - "core/image_synthesis_coordinator.py — 图像合成协调器（ImageSynthesisCoordinator）"
+  - "core/schema_verifier.py — 结构校验器（SchemaVerifier）"
+  - "core/consistency_verifier.py — 文本自洽校验器（ConsistencyVerifier）"
+  - "core/vision_consistency_verifier.py — 图像内容一致性校验器（VisionConsistencyVerifier）"
+  - "core/vlm_pipeline_runner.py — VLM 管线编排器（VLMPipelineRunner）"
+  - "scripts/vlm_dataset_adapter.py — VLM 双轨导出适配器（VLMDatasetAdapter）"
+  - "configs/vlm_task_sample.yaml — VLM 任务配置示例"
+  - "core/config_loader.py — 添加 vlm 配置命名空间和 get_vlm_config()"
+  - "core/__init__.py — 导出 VLM 新增模块的所有公共类"
+  - "scripts/cli.py — 添加 vlm 子命令，版本升至 0.3.0"
+  - "INTERFACE_DESIGN.md — 追加 VLM 视觉链路接口设计文档"
+  - "所有模块语法验证和基础功能测试通过"
+  - "CLI vlm --help 验证通过"
 artifacts:
-  - /home/ubuntu/hermes_data_agent_repo_20260414/ARCHITECTURE.md
-  - /home/ubuntu/hermes_data_agent_repo_20260414/diagrams/architecture.mmd
-  - /home/ubuntu/hermes_data_agent_repo_20260414/diagrams/architecture.png
-pending_user_confirmation:
-  - 是否接受 VLMSample / VLMRecord / BaseRecord 的分层关系
-  - 是否接受 LLMClient、ImageClient、VLMClient 三类客户端拆分方案
-  - 是否接受 CascadeOrchestrator 的模式化扩展方案
-  - 是否接受训练导出与审阅导出的双轨结构
-next_phase_if_approved: 3
-next_phase_title_if_approved: 接口与数据结构定义
+  - INTERFACE_DESIGN.md
+  - core/contracts.py
+  - core/image_client.py
+  - core/vlm_client.py
+  - core/client_factory.py
+  - core/visual_seed_engine.py
+  - core/visual_generalization_engine.py
+  - core/image_synthesis_coordinator.py
+  - core/schema_verifier.py
+  - core/consistency_verifier.py
+  - core/vision_consistency_verifier.py
+  - core/vlm_pipeline_runner.py
+  - scripts/vlm_dataset_adapter.py
+  - configs/vlm_task_sample.yaml
+next_phase: 4
+next_phase_title: 子代理驱动实现 (TDD)
 next_focus:
-  - contracts.py 的对象字段定义
-  - 三类客户端的统一调用签名与异常结构
-  - CLI 的 vlm 子命令参数设计
-  - 导出对象与目录结构契约
+  - 为每个 VLM 模块编写单元测试
+  - 实现 VisualSeedEngine 的完整配置解析逻辑
+  - 实现 VisualGeneralizationEngine 的 LLM 调用和 JSON 解析
+  - 实现 ImageSynthesisCoordinator 的图像生成调用
+  - 实现三层验证器的完整验证逻辑
+  - 实现 VLMPipelineRunner 的端到端管线
+  - 实现 VLMDatasetAdapter 的双轨导出
